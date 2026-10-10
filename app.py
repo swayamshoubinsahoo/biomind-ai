@@ -8,8 +8,13 @@ st.set_page_config(page_title="BioMind AI", page_icon="🏥", layout="wide")
 st.title("🏥 BioMind AI — Clinical Report Simplifier & Patient Assistant")
 st.caption("Powered by Gemini Multimodal Vision • Biomedical Engineering Track • Adamas University")
 
-# Sidebar Controls
+# Sidebar Configuration
 st.sidebar.header("Configuration")
+api_key_input = st.sidebar.text_input(
+    "Gemini API Key (Optional)", 
+    type="password", 
+    help="Enter your Google AI Studio API key to enable live cloud multimodal vision parsing."
+)
 lang = st.sidebar.selectbox("Patient Vernacular Language", ["English", "Bengali (বাংলা)", "Hindi (हिन्दी)"])
 
 st.sidebar.divider()
@@ -37,15 +42,12 @@ if report_data and st.button("Analyze & Simplify Report", type="primary"):
     
     with col1:
         st.subheader("1. Biomarker Triage & Anomaly Flags")
-        # Sample detection metrics
         demo_metrics = {"HbA1c": 6.8, "Fasting Blood Sugar": 135, "Total Cholesterol": 210, "Hemoglobin": 14.2}
         if "Cardiac" in sample_choice:
             demo_metrics = {"Troponin": 0.08, "Fasting Blood Sugar": 95}
             
         triage_table = evaluate_biomarkers_demo(demo_metrics)
         df = pd.DataFrame(triage_table)
-        
-        # Color styling
         st.dataframe(df, use_container_width=True)
         
         has_elevated = any(row["Status"] != "Normal" for row in triage_table)
@@ -57,7 +59,7 @@ if report_data and st.button("Analyze & Simplify Report", type="primary"):
     with col2:
         st.subheader(f"2. Simplified Explanation ({lang})")
         with st.spinner("Translating medical terminology with safety guardrails..."):
-            summary = simplify_clinical_report(report_data, language=lang)
+            summary = simplify_clinical_report(report_data, language=lang, api_key=api_key_input)
             st.markdown(summary)
             
     st.divider()
