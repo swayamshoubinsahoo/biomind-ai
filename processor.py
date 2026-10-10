@@ -1,37 +1,47 @@
-import numpy as np
-from scipy.signal import welch
+import io
+from pypdf import PdfReader
+from PIL import Image
 
-def generate_eeg_stream(state="focus", duration_sec=10, fs=250):
-    t = np.linspace(0, duration_sec, duration_sec * fs, endpoint=False)
-    
-    if state == "focus":
-        theta_amp, alpha_amp, beta_amp = 0.5, 0.9, 3.2
-    elif state == "fatigued":
-        theta_amp, alpha_amp, beta_amp = 3.6, 2.1, 0.5
-    else:  # stressed
-        theta_amp, alpha_amp, beta_amp = 0.3, 0.5, 4.6
+def extract_text_from_pdf(uploaded_file):
+    reader = PdfReader(uploaded_file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
+    return text
 
-    noise = np.random.normal(0, 0.25, len(t))
-    eeg = (
-        theta_amp * np.sin(2 * np.pi * 6 * t) +
-        alpha_amp * np.sin(2 * np.pi * 10 * t) +
-        beta_amp * np.sin(2 * np.pi * 20 * t) +
-        noise
-    )
-    return t, eeg
+def parse_report_data(uploaded_file):
+    file_type = uploaded_file.name.split(".")[-1].lower()
+    
+    if file_type == "pdf":
+        raw_text = extract_text_from_pdf(uploaded_file)
+        return {"type": "text", "content": raw_text}
+    elif file_type in ["jpg", "jpeg", "png"]:
+        image = Image.open(uploaded_file)
+        return {"type": "image", "content": image}
+    else:
+        return {"type": "unknown", "content": None}
 
-def extract_band_telemetry(eeg, fs=250):
-    freqs, psd = welch(eeg, fs=fs, nperseg=min(len(eeg), 500))
-    
-    theta = float(np.trapz(psd[(freqs >= 4) & (freqs <= 8)], freqs[(freqs >= 4) & (freqs <= 8)]))
-    alpha = float(np.trapz(psd[(freqs >= 8) & (freqs <= 13)], freqs[(freqs >= 8) & (freqs <= 13)]))
-    beta = float(np.trapz(psd[(freqs >= 13) & (freqs <= 30)], freqs[(freqs >= 13) & (freqs <= 30)]))
-    
-    engagement_index = beta / (alpha + theta + 1e-6)
-    
-    return {
-        "theta": round(theta, 3),
-        "alpha": round(alpha, 3),
-        "beta": round(beta, 3),
-        "engagement": round(float(engagement_index), 3)
+def evaluate_biomarkers_demo(biomarker_dict):
+    """
+    Standard reference range evaluator to flag critical alerts.
+    """
+    ranges = {
+        "HbA1c": (4.0, 5.6, "%"),
+        "Fasting Blood Sugar": (70, 100, "mg/dL"),
+        "Total Cholesterol": (125, 200, "mg/dL"),
+        "Hemoglobin": (12.0, 17.5, "g/dL"),
+        "Troponin": (0.0, 0.04, "ng/mL")
     }
+    
+    triage = []
+    for marker, (low, high, unit) in ranges.items():
+        if marker in biomarker_dict:
+            val = biomarker_dict[marker]
+            status = "Normal"
+            if val < low:
+                status = "Low"
+            elif val > high:
+                status = "Elevated"
+            triage.append({"Biomarker": marker, "Value": f"{val} {unit}", "Normal Range": f"{low} - {high} {unit}", "Status": status})
+            
+    return triage
