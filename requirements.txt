@@ -1,0 +1,5 @@
+streamlit
+pandas
+pypdf
+pillow
+google-genai
