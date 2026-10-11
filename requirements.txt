@@ -1,5 +1,5 @@
 streamlit
 pandas
-pypdf
+pymupdf
 pillow
 google-genai
