@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import os
 from processor import process_file
 from ai_diagnostics import simplify_clinical_report
 
@@ -15,36 +16,60 @@ st.set_page_config(
 st.title("📄 BioMind AI — Clinical Report Simplifier & Patient Assistant")
 st.caption("Powered by Gemini Multimodal Vision • Biomedical Engineering Track • Adamas University")
 
-# Sidebar Configuration (Model technicalities completely hidden)
+# Sidebar Configuration
 st.sidebar.header("⚙️ Configuration")
 st.sidebar.caption("⚡ Engine: Auto-Adaptive Resilient Vision (Auto-Fallback)")
 
+# 1. READ PERMANENT SECRET KEY
+secret_key = ""
+if "GEMINI_API_KEY" in st.secrets:
+    secret_key = st.secrets["GEMINI_API_KEY"]
+elif os.environ.get("GEMINI_API_KEY"):
+    secret_key = os.environ.get("GEMINI_API_KEY")
+
 api_key_input = st.sidebar.text_input(
     "Gemini API Key (optional if set in env/secrets)",
+    value=secret_key,
     type="password"
 )
 
 lang = st.sidebar.selectbox(
     "Explanation Language",
-    ["English", "Hindi", "Bengali", "Spanish", "French"],
+    ["English", "Bengali", "Hindi", "Spanish", "French"],
     index=0
 )
 
-# Pre-configured demo sample
+# 2. ALL 3 CLINICAL DEMO SAMPLES
 SAMPLE_REPORTS = {
     "None": None,
     "Cardiac Triage Panel": {
         "text": "Troponin I: 0.08 ng/mL (Normal: 0.0 - 0.04 ng/mL) [ELEVATED]\nFasting Blood Sugar: 95 mg/dL (Normal: 70 - 100 mg/dL) [NORMAL]\nECG: Sinus Tachycardia, ST elevation noted in leads V1-V3.",
         "table": [
             {"Biomarker": "Fasting Blood Sugar", "Value": "95 mg/dL", "Normal Range": "70 - 100 mg/dL", "Status": "Normal"},
-            {"Biomarker": "Troponin", "Value": "0.08 ng/mL", "Normal Range": "0.0 - 0.04 ng/mL", "Status": "Elevated"},
+            {"Biomarker": "Troponin I", "Value": "0.08 ng/mL", "Normal Range": "0.0 - 0.04 ng/mL", "Status": "Elevated"},
+        ]
+    },
+    "Complete Blood Count (CBC)": {
+        "text": "Haemoglobin (Hb): 9.2 gm/dL (Reference Range: 13.0 - 17.0 gm/dL) [LOW]\nTotal RBC Count: 3.4 mill/cumm (Reference Range: 4.5 - 5.5 mill/cumm) [LOW]\nTotal Leucocyte Count (TLC): 7,800 /cumm (Reference Range: 4,000 - 11,000 /cumm) [NORMAL]\nPlatelet Count: 210,000 /cumm (Reference Range: 150,000 - 450,000 /cumm) [NORMAL]",
+        "table": [
+            {"Biomarker": "Haemoglobin (Hb)", "Value": "9.2 gm/dL", "Normal Range": "13.0 - 17.0 gm/dL", "Status": "Low"},
+            {"Biomarker": "Total RBC Count", "Value": "3.4 mill/cumm", "Normal Range": "4.5 - 5.5 mill/cumm", "Status": "Low"},
+            {"Biomarker": "Total Leucocyte Count", "Value": "7,800 /cumm", "Normal Range": "4,000 - 11,000 /cumm", "Status": "Normal"},
+            {"Biomarker": "Platelet Count", "Value": "210,000 /cumm", "Normal Range": "150,000 - 450,000 /cumm", "Status": "Normal"}
+        ]
+    },
+    "Endocrine / Prolactin Panel": {
+        "text": "Clinical Parameter: Serum Prolactin\nObserved Value: 42.5 ng/mL\nBiological Reference Interval: Non-pregnant Female: 4.8 - 23.3 ng/mL [ELEVATED]\nTSH: 2.1 uIU/mL (Reference Range: 0.4 - 4.2 uIU/mL) [NORMAL]",
+        "table": [
+            {"Biomarker": "Serum Prolactin", "Value": "42.5 ng/mL", "Normal Range": "4.8 - 23.3 ng/mL", "Status": "Elevated"},
+            {"Biomarker": "TSH", "Value": "2.1 uIU/mL", "Normal Range": "0.4 - 4.2 uIU/mL", "Status": "Normal"}
         ]
     }
 }
 
 selected_sample = st.sidebar.selectbox("Load Demo Sample", list(SAMPLE_REPORTS.keys()), index=0)
 
-# Main File Uploader
+# Main Area
 uploaded_file = st.file_uploader(
     "Upload Diagnostic Report (PDF, PNG, JPG)",
     type=["pdf", "png", "jpg", "jpeg"]
@@ -61,9 +86,11 @@ elif selected_sample != "None":
     report_data = {"type": "text", "content": sample_info["text"]}
     triage_table = sample_info["table"]
 
-# Execution Trigger
+# Run Analysis
 if report_data is not None:
     if st.button("Analyze & Simplify Report", type="primary"):
+        effective_key = api_key_input if api_key_input else secret_key
+        
         col1, col2 = st.columns([1, 1])
 
         with col2:
@@ -72,14 +99,13 @@ if report_data is not None:
                 summary = simplify_clinical_report(
                     report_data=report_data,
                     language=lang,
-                    api_key=api_key_input if api_key_input else None
+                    api_key=effective_key if effective_key else None
                 )
                 st.markdown(summary)
 
         with col1:
             st.subheader("1. Biomarker Triage & Anomaly Flags")
             
-            # Auto-parse biomarker lines into table if demo table is not present
             if not triage_table:
                 extracted_rows = []
                 for line in summary.split("\n"):
